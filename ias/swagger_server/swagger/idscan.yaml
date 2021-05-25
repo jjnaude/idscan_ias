@@ -1,0 +1,502 @@
+openapi: 3.0.0
+info:
+  title: ID-Scan Image Analysis API
+  description: >-
+    <p>This is the first draft of an API for the ID-Scan Image Analysis
+    webservice. The service aims to allow enrollment of livestock (which adds
+    individuals to the database) and lookup of known/unknown livestock against
+    the database.</p>
+
+    <h1>Overview</h1>
+
+    <p>Livestock can be enrolled via the POST /media endpoint. The same endpoint 
+    can also be used to add additional images to an allready enrolled animal and 
+    the API does not distinguish between these two cases.</p>
+
+    <p>To support efficient lookup of animals from smaller groups, indexes for
+    these groups can be created (or updated) via the POST /index endpoint. In
+    phase 1 indexes are expected to correspond to herds, but the mechanism is
+    generic and can support arbitrary subsets, such as animals that were
+    reported stolen in the last month, or animals that have been present in
+    Limpopo. An index that is no longer required can be deleted via DELETE
+    /index. Existing index definitions can also be queried via GET /indices and
+    GET /index. These last two endpoints should not be required in production,
+    but will be useful to aid debugging.</p>
+
+    <p>A query can be created via the POST /query endpoint. Keep in mind that 
+    every query must be run against a defined index and if the target animal is 
+    not a member of the specified index, it will not be found.</p>
+
+    <p>To support a scalable solution, enrollment, de-enrollment, querying and
+    index-building are all non-blocking calls. They do not return results, but
+    rather job-ids that can be used to query the status (and results if
+    applicable) of the operation at a later time. All such status queries are
+    performed via the GET /job endpoint. Long-running jobs can also be cancelled
+    via the DELETE /job endpoint</p>
+
+    <h1>Assumptions</h1>
+
+    <p>It is assumed that this service will NOT be exposed to the public
+    internet, so all calls to it will originate from (or be proxied through) the
+    ID-Scan web-app server. Therefore all endpoints in this version of the API
+    are <b>unauthenticated</b>, as it is assumed that the web-app will verify
+    that a user has the requisite rights to perform an operation before hitting
+    an endpoint.</p>
+  version: 0.2.0
+servers:
+  - url: 'http://idscan.hopto.org:8080'
+    description: Temporary Innoventix testing server
+paths:
+  '/media':
+    post:
+      summary: Add a media asset to the matching database.
+      operationId: ias.api.postMedia
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                media:
+                  $ref: '#/components/schemas/MediaAsset'
+                animalId:
+                  $ref: '#/components/schemas/GUID'
+                  description: Unique ID of the animal appearing in this image. Typically corresponds to a primary key in the SilverBridge database.
+              example: {
+                          "media": {
+                            "url": "http://idscan.hopto.org/data/923/IMG_9238.JPG",
+                            "points": [{"type": "Left Nostril",
+                                        "coordinates": [[952, 1620]]
+                                        },
+                                        {"type": "Right Nostril",
+                                        "coordinates": [[2896, 1460]]
+                                        }
+                                      ]
+                            },
+                          "animalId": "d5a43450-2321-40ac-9746-9cf5d7447aca"
+                        }
+      description: >-
+        This endpoint will perform some basic sanity testing on the submitted data and, if it passes, add an enrollment task to the internal job queue. It will return a job-id that can be used by the client to query the status of the enrollment.
+      responses:
+        '202':
+          description: >-
+            Received. The request was received and a job to execute this query has been created and added to the job-queue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '400':
+          description: "Bad request. The request was received, but could not be honored due to invalid input. Examples could include : <li>Failed to access URL.</li>
+          <li>Image did not meet requirements.</li>
+          <li>Conflict detected. Image does not match against other images of this animal.</li>          
+          <li>Conflict detected. Image matched against different animal.</li>"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errorCode:
+                    type: integer
+                    example: -3
+                    description: >-
+                      An integer error code corresponding to this class of
+                      errors. Error code mappings are TBD.
+                  errorMessage:
+                    type: string
+                    description: >-
+                      A human legible message explaining the origin of the
+                      error.
+                    example: >-
+                      Muzzle dimensions should be at least 300px X 200px in input image. Supplied image had muzzle dimensions 123px X 88px
+      tags:
+        - Media management
+  '/media/{mediaId}':
+    delete:
+      operationId: ias.api.deleteMedia
+      summary: Remove a media asset from the matching database.
+      description: >-
+       This endpoint is included to allow resource management in the longer term. It should not be used in the initial phase. If a specific animal needs to be removed, this should typically be done by rebuilding the indexes in which it occurs, with all of its media assets removed, and even this should be done with caution. Media assets should only be removed from the system once  resource usage requires it. It is expected that the system could support millions of media assets on modest hardware, so removing records should not be required in the short term. 
+      parameters:
+        - name: mediaId
+          required: true
+          in: path
+          description: ID of the media item being deleted. Typically corresponds to a primary key in the SilverBridge database.
+          schema:
+            $ref: '#/components/schemas/GUID'
+      responses:
+        '204':
+          description: >-
+            The request was received the media asset was succesfully deleted. Note that this does not guarantee that it is no longer present in any indices, but it does mean that any future index building operations that refer to this media asset will fail unless it is re-added.
+        '404':
+          description: Not found. Returned if the mediaID could not be found
+      tags:
+        - Media management
+  /query:
+    post:
+      summary: Request a query be run against a provided image.
+      operationId: ias.api.postQuery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - media
+                - index
+              properties:
+                media:
+                  $ref: '#/components/schemas/MediaAsset'
+                priority:
+                  type: integer
+                  format: int8
+                  example: 64
+                  default: 128
+                  description: A number between 0 and 255 reflecting the priority of the query. Higher numbers correspond to higher priority tasks. Useful to prioritise or deprioritise certain queries (e.g.  prioritise SAPS traffic stops, deprioritise internal database consistency checks running in the background).
+                index:
+                  $ref: '#/components/schemas/GUID'
+                  description: >-
+                    ID of the index that this lookup should be performed against.
+                topN: 
+                  type: integer
+                  format: int8
+                  default: 1
+                  description: An upper bound on how many matches to return. In production code this value must always be set to 1 (or left unset since 1 is the default). This parameter is provided for use by debugging / benchmarking code or in internal consistency checks of the matching engine.
+      description: This endpoint will initiate a query for a provided image.
+      responses:
+        '202':
+          description: >-
+            The request was received and a job to execute this query has been
+            created and added to the job-queue.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job-id:
+                    $ref: '#/components/schemas/GUID'
+                    description: >-
+                      A job-id that can be provided to the /status endpoint to
+                      obtain the status and results of the query.
+                    example: d5a43450-2321-40ac-9746-9cf5d7447aca
+      tags:
+        - Queries
+  '/index':
+    post:
+      operationId: ias.api.postIndex
+      summary: >-
+        Request the (re)building of an index to provide fast lookups within a
+        defined subset of animals.
+      description: >-
+        <p>It is anticipated that initially indexes will correspond to herds, to allow for fast lookup of a cow within a known herd, but in the longer term the application may choose to define an index for any subset of animals that will often be the target of a query (i.e. the subset of all animals reported stolen, or the subset of all animals from a given province).</p> 
+        <p>Index building is potentially an expensive operation, so the workflow should be designed to avoid excessive rebuilding. When a herd is initially defined, all animals should be enrolled before building the index for the herd, rather than rebuilding after every addition. However, it is not required to wait for all enrollments to complete before initiating the index build, as the Image analysis server will enforce this constraint via job-scheduling.</p>
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mediaIds:
+                  type: array
+                  description: Array of mediaIDs that should be included in this index.
+                  items:
+                    $ref: '#/components/schemas/GUID'
+                fromIndex:
+                  $ref: '#/components/schemas/GUID'
+      responses:
+        '202':
+          description: >-
+            The request was received and a job to build this index has been
+            created and added to the job-queue.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+      tags:
+        - Indexing
+  '/index/{indexId}':
+    get:
+      operationId: ias.api.getIndex
+      summary: Get the currently active definition of a specified index.
+      description: >-
+        Get the currently active definition of a specified index. this may be
+        different from the index definition that was uploaded with the previous
+        POST /index since the rebuild may not yet have completed.
+      parameters:
+        - name: indexId
+          required: true
+          in: path
+          description: ID of the index that should be returned.
+          schema:
+            $ref: '#/components/schemas/GUID'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mediaIds:
+                    type: array
+                    description: >-
+                      An array of animalIDs that will be included in queries
+                      against the specified index.
+                    items:
+                      $ref: '#/components/schemas/GUID'
+        '404':
+          description: Index not found.
+      tags:
+        - Indexing
+    delete:
+      operationId: ias.api.deleteIndex
+      summary: Delete an index.
+      description: Delete the specified index.
+      parameters:
+        - name: indexId
+          required: true
+          in: path
+          description: ID of the index that should be deleted.
+          schema:
+            $ref: '#/components/schemas/GUID'
+      responses:
+        '204':
+          description: Success. Index was deleted.
+        '404':
+          description: Index not found.
+      tags:
+        - Indexing
+  /indices:
+    get:
+      operationId: ias.api.getIndices
+      summary: Get a list of currently defined indices.
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  indices:
+                    type: array
+                    description: An array of indexIDs that are currently defined.
+                    items:
+                      $ref: '#/components/schemas/GUID'
+      tags:
+      - Indexing
+  '/job/{jobId}':
+    get:
+      operationId: ias.api.getJob
+      summary: 'Query the status of an enrollment, index-building or query task.'
+      parameters:
+        - name: jobId
+          required: true
+          example: d5a43450-2321-40ac-9746-9cf5d7447aca
+          in: path
+          description: Job-id for which the task status is being requested.
+          schema:
+            $ref: '#/components/schemas/GUID'
+      description: >-
+        This endpoint will report on the status of the enrollment, index-build or query that is referred to by the supplied job-id. The results will remain available for EXPIRY_TIME before being expired on the result store. it is anticipated that EXPIRY_TIME will be set to 24h in production but it will be set to 60s during development to allow for easy testing of the expiry mechanism.
+      responses:
+        '200':
+          description: >-
+            OK. Returned if the jobID was succesfully looked up and the status
+            can be returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    enum:
+                      - PENDING
+                      - STARTED
+                      - RETRY
+                      - FAILURE
+                      - SUCCESS
+                      - REVOKED
+                  errorCode:
+                    type: integer
+                    example: 7
+                  errorMessage:
+                    type: string
+                    example: >-
+                      The animal could not be enrolled because a duplicate was
+                      found in the database
+                  result:
+                    description: Result that was returned.
+                    $ref: '#/components/schemas/Result'
+        '404':
+          description: Returned if the jobId could not be found
+      tags:
+      - Retrieving results
+    delete:
+      operationId: ias.api.cancelJob
+      summary: Cancel a job.
+      description: >-
+        Cancel a job. Useful if the user initiates an expensive operation like a
+        global lookup and then closes the app before it is complete or if an
+        index rebuild is requested before the previous index build has
+        completed.
+      parameters:
+        - name: jobId
+          required: true
+          example: d5a43450-2321-40ac-9746-9cf5d7447aca
+          in: path
+          description: Job-id that is being cancelled.
+          schema:
+            $ref: '#/components/schemas/GUID'
+      responses:
+        '204':
+          description: Returned if the job was succesfully cancelled.
+        '404':
+          description: Returned if the jobId could not be found
+      tags:
+      - Cancelling jobs
+components:
+  schemas:
+    MediaAsset:
+      required:
+        - points
+      properties:
+        url:
+          type: string
+          description: URL where this asset can be retrieved with a GET request. This location should have some persistence since the IAS might defer the actual downloading and processing of the image and will store the URL in case it ever needs to reprocess the image.
+          example: 'https://idscan.s3.af-south-1.amazonaws.com/17-007/17-007 (1).jpg'
+        points:
+          type: array
+          items:
+            $ref: '#/components/schemas/KeyPoints'
+    QueryResult:
+      type: object
+      properties:
+        matches:
+          type: array
+          items: 
+            $ref: '#/components/schemas/Match'
+        timeTaken:
+          type: number
+          description: The amount of time (in s) that the matching engine took to generate this result. This is included for use in benchmarking code. Production code should ignore this value.
+          example: 0.35
+    IDResult:
+      type: object
+      properties:
+        id:
+          $ref: '#/components/schemas/GUID'
+        timeTaken:
+          type: number
+          description: The amount of time (in s) that the matching engine took to generate this result. This is included for use in benchmarking code. Production code should ignore this value.
+          example: 0.35
+    GUID:
+      type: string
+      format: uuid      
+      example: d5a43450-2321-40ac-9746-9cf5d7447aca
+      pattern: '^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$'
+      minLength: 32
+      maxLength: 36
+    relatedGUID:
+      description: The index (if any) that this index was derived from. This field is entirely optional and may be used by the IAS implementation to speed index construction 
+      type: string
+      format: uuid      
+      example: d5a43450-2321-40ac-9746-9cf5d7447aca
+      pattern: '^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$'
+      minLength: 32
+      maxLength: 36
+    Match:
+      required:
+        - matchID
+        - src
+        - dst
+        - matchScore
+      properties:
+        matchID:
+          $ref: '#/components/schemas/GUID'
+          description: The animalID of the animal that the image matched against.
+        src:
+          $ref: '#/components/schemas/MediaAsset'
+        dst:
+          $ref: '#/components/schemas/MediaAsset'
+        matchScore:
+          type: number
+          example: 0.97
+        matches:
+          type: array
+          description: >-
+            Array of (srcIndex,dstIndex) pairs indicating matching points
+            between src image and dst image.
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              type: integer
+              format: int16
+    KeyPoints:
+      required:
+        - coordinates
+        - type 
+      properties:
+        coordinates:
+          type: array
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            example: [3,4]
+            items:
+              type: number
+        scales:
+          type: array
+          items:
+            type: number
+            example: 1
+        orientations:
+          type: array
+          items:
+            type: number
+            example: 1.8
+        type:
+          type: string
+          enum:
+            - Left Nostril
+            - Right Nostril
+            - Upper Lip
+            - R2D2
+            - SIFT
+        descriptors:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+            example:
+              - 1.34
+              - 2.34
+              - -512
+    Job:
+      required:
+        - jobId
+      properties:
+        jobId:
+          $ref: '#/components/schemas/GUID'
+          description: >-
+            A job-id that can be provided to the /status endpoint to
+            obtain the status of this task.
+          example: d5a43450-2321-40ac-9746-9cf5d7447aca
+    Result:
+      oneOf:
+        - $ref: '#/components/schemas/QueryResult'
+        - $ref: '#/components/schemas/IDResult'
+tags:
+  - name: Media management
+  - name: Queries
+  - name: Indexing
+  - name: Retrieving results
+  - name: Cancelling jobs

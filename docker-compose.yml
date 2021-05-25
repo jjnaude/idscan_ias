@@ -1,0 +1,88 @@
+version: '3'
+services:
+        ias:
+                image: idscan_ias
+                build: 
+                        context: .
+                        dockerfile: Dockerfile                        
+                depends_on:
+                        - redis
+                        - rabbitmq
+                        - flower
+                volumes:
+                       - .:/home/appuser
+                network_mode: host
+                expose: 
+                    - "8080"
+                command: python -m ias.swagger_server
+        cpu_worker:
+                image: idscan_cpu_worker
+                build: 
+                        context: .
+                        dockerfile: cpu_worker/Dockerfile
+                # use host to allow remote machines to connect
+                network_mode: host
+                working_dir: /home/appuser
+                entrypoint: celery -A ias.tasks.cpu_tasks worker --concurrency=2 -Ofair --loglevel=info -Q cpu_tasks
+#                entrypoint: celery worker -A app.celery --loglevel=info
+        # gpu_worker:
+        #         image: detweb_gpu_worker
+        #         build: gpu_worker
+        #         volumes:
+        #                 - ${SORTIES_PATH}:/sorties
+        #                 - ${APP_PATH}:/app
+        #                 - ${SRTM_PATH}:/root/.srtm
+        #                 - uwsgi-sockets:/tmp
+        #         environment:
+        #             - DB_URL=${DB_URL}
+        #             - REDIS_IP=${REDIS_IP}
+        #             - LOG_FOLDER=${LOG_FOLDER}
+        #             - CONFIG_FP=${CONFIG_FP}
+        #             - LC_ALL=${LC_ALL}
+        #             - LANG=${LANG}
+        #         network_mode: host
+        #         working_dir: /app/detweb
+        #         entrypoint: celery worker -A tasks.gpu_tasks --concurrency=1 -Ofair --loglevel=info -Q gpu_tasks -n gpu_worker
+        flower:
+                image: mher/flower
+                depends_on:
+                    - redis
+                expose:
+                    - "5555"
+                entrypoint: flower --broker=amqp://guest:guest@localhost:5672//
+                network_mode: host
+        redis:
+                image: redis
+                network_mode: host
+                expose: 
+                    - "6379"
+        rabbitmq:
+                image: rabbitmq
+                network_mode: host
+                volumes:
+                        - ./rabbitmq:/etc/rabbitmq
+                entrypoint: rabbitmq-server
+                expose:
+                    - "5672"
+                    - "15672"
+                    - "61613"
+#         nginx:
+#                 image: nginx
+#                 depends_on:
+#                     - server
+#                 network_mode: host
+#                 expose: 
+#                    - "80"
+#                    - "443"
+#                 volumes:
+#                         - ${SORTIES_PATH}:/sorties
+#                         - ${APP_PATH}:/app
+#                         - ${SRTM_PATH}:/root/.srtm
+#                         - ./nginx/conf.d:/etc/nginx/conf.d
+#                         - ../detweb-frontend/build:/frontend
+#                         - uwsgi-sockets:/tmp
+# volumes:
+#     uwsgi-sockets:  
+
+
+

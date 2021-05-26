@@ -21,9 +21,11 @@ services:
                         context: .
                         dockerfile: cpu_worker/Dockerfile
                 # use host to allow remote machines to connect
+                volumes:
+                        - .:/home/appuser
                 network_mode: host
                 working_dir: /home/appuser
-                entrypoint: celery -A ias.tasks.cpu_tasks worker --concurrency=2 -Ofair --loglevel=info -Q cpu_tasks
+                entrypoint: celery -A ias.tasks worker --concurrency=2 -Ofair --loglevel=info -Q cpu_tasks
 #                entrypoint: celery worker -A app.celery --loglevel=info
         # gpu_worker:
         #         image: detweb_gpu_worker

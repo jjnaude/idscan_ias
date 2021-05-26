@@ -42,7 +42,7 @@ info:
     are <b>unauthenticated</b>, as it is assumed that the web-app will verify
     that a user has the requisite rights to perform an operation before hitting
     an endpoint.</p>
-  version: 0.2.0
+  version: 0.2.1
 servers:
   - url: 'http://idscan.hopto.org:8080'
     description: Temporary Innoventix testing server
@@ -180,14 +180,28 @@ paths:
                       A job-id that can be provided to the /status endpoint to
                       obtain the status and results of the query.
                     example: d5a43450-2321-40ac-9746-9cf5d7447aca
+        '400':
+          description: >-
+            The request could not be queued for execution because an error was found eg. the index that is being queried does not exist.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errorCode:
+                    type: integer
+                    example: 7
+                  errorMessage:
+                    type: string
+                    example: >-
+                      Index d5a43450-2321-40ac-9746-9cf5d7447aca does not exist.
       tags:
         - Queries
   '/index':
     post:
       operationId: ias.api.postIndex
       summary: >-
-        Request the (re)building of an index to provide fast lookups within a
-        defined subset of animals.
+        Request the building of an index to provide fast lookups within a defined subset of mediaItems.
       description: >-
         <p>It is anticipated that initially indexes will correspond to herds, to allow for fast lookup of a cow within a known herd, but in the longer term the application may choose to define an index for any subset of animals that will often be the target of a query (i.e. the subset of all animals reported stolen, or the subset of all animals from a given province).</p> 
         <p>Index building is potentially an expensive operation, so the workflow should be designed to avoid excessive rebuilding. When a herd is initially defined, all animals should be enrolled before building the index for the herd, rather than rebuilding after every addition. However, it is not required to wait for all enrollments to complete before initiating the index build, as the Image analysis server will enforce this constraint via job-scheduling.</p>
@@ -214,6 +228,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Job'
+        '400':
+          description: >-
+            The request could not be queued for execution because an error was found eg. the fromIndex that was provided, or one of the mediaItems listed for inclusion does not exist.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errorCode:
+                    type: integer
+                    example: 7
+                  errorMessage:
+                    type: string
+                    example: >-
+                      Index d5a43450-2321-40ac-9746-9cf5d7447aca does not exist.
+
       tags:
         - Indexing
   '/index/{indexId}':

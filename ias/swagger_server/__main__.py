@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 from ias.swagger_server import create_app
+from ias.tasks.celery import celeryApp
 
 app = create_app()
+celeryApp.set_default()
 app.run(port=8080)
 
 # import connexion

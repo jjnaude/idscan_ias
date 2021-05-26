@@ -128,3 +128,25 @@ dmypy.json
 .pyre/
 
 # End of https://www.gitignore.io/api/python
+cov_html/coverage_html.js
+cov_html/favicon_32.png
+cov_html/ias___init___py.html
+cov_html/ias_api_py.html
+cov_html/ias_swagger_server___init___py.html
+cov_html/ias_tasks___init___py.html
+cov_html/ias_tasks_celery_py.html
+cov_html/ias_tasks_celeryconfig_py.html
+cov_html/ias_tasks_cpu_tasks_py.html
+cov_html/ias_tasks_gpu_tasks_py.html
+cov_html/ias_test___init___py.html
+cov_html/ias_test_test_ias_py.html
+cov_html/index.html
+cov_html/jquery.ba-throttle-debounce.min.js
+cov_html/jquery.hotkeys.js
+cov_html/jquery.isonscreen.js
+cov_html/jquery.min.js
+cov_html/jquery.tablesorter.min.js
+cov_html/keybd_closed.png
+cov_html/keybd_open.png
+cov_html/status.json
+cov_html/style.css

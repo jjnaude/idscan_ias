@@ -24,6 +24,11 @@ def deleteMedia(mediaId):  # noqa: E501
 
 
 def postQuery(body):  # noqa: E501
+    if not r.hget("indices", body["index"]):
+        return {
+            "errorCode": -1,
+            "errorMessage": f"Index {body['index']} does not exist",
+        }, 400
     jobId = str(query.delay(body))
     r.set(jobId, 1)
     return {"jobId": jobId}, 202
@@ -45,17 +50,18 @@ def getIndex(indexId):  # noqa: E501
 
 
 def postIndex(body):  # noqa: E501
-    """Request the (re)building of an index to provide fast lookups within a defined subset of animals.
-
-    &lt;p&gt;It is anticipated that initially indexes will correspond to herds, to allow for fast lookup of a cow within a known herd, but in the longer term the application may choose to define an index for any subset of animals that will often be the target of a query (i.e. the subset of all animals reported stolen, or the subset of all animals from a given province).&lt;/p&gt; &lt;p&gt;Index building is potentially an expensive operation, so the workflow should be designed to avoid excessive rebuilding. When a herd is initially defined, all animals should be enrolled before building the index for the herd, rather than rebuilding after every addition. However, it is not required to wait for all enrollments to complete before initiating the index build, as the Image analysis server will enforce this constraint via job-scheduling.&lt;/p&gt; # noqa: E501
-
-    :param body:
-    :type body: List[]
-    :param index_id: ID of the index that should be (re)built.
-    :type index_id: int
-
-    :rtype: InlineResponse2023
-    """
+    if "fromIndex" in body.keys():
+        if not r.hget("indices", body["fromIndex"]):
+            return {
+                "errorCode": -1,
+                "errorMessage": f"Index {body['fromIndex']}, that was provided as fromIndex does not exist",
+            }, 400
+    for mediaId in body["mediaIds"]:
+        if not r.hget("media", mediaId):
+            return {
+                "errorCode": -2,
+                "errorMessage": f"MediaItem {mediaId}, does not exist",
+            }, 400
     jobId = str(buildIndex.delay(body))
     r.set(jobId, 1)
     return {"jobId": jobId}, 202

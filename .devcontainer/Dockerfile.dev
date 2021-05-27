@@ -1,5 +1,5 @@
-FROM mcr.microsoft.com/vscode/devcontainers/python:3 AS base
-
+#FROM mcr.microsoft.com/vscode/devcontainers/python:3 AS base
+FROM pytorch/pytorch AS base
 # Setup env
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
@@ -11,7 +11,8 @@ FROM base AS python-deps
 
 # Install pipenv and compilation dependencies
 RUN pip install pipenv
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
+RUN pip install pipx
+RUN apt-get update && apt-get install -y --no-install-recommends gcc git
 
 WORKDIR /workspaces
 RUN printf '%s\n' 'default_context:' '  project_name: "ias"' > .cookiecutterrc

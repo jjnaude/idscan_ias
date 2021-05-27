@@ -4,10 +4,10 @@ import pytest
 import redis
 
 import ias
+import ias.tasks.gpu_tasks
 from ias.swagger_server import create_app
 
 app = create_app()
-
 
 testQuery = {
     "index": "d5a43450-2321-40ac-9746-9cf5d7447aca",
@@ -38,7 +38,7 @@ def celery_config():
         "broker_url": "amqp://",
         "result_backend": "redis://",
         "task_routes": {
-            "ias.tasks.gpu_tasks.*": {"queue": "gpu_tasks"},
+            "ias.tasks.gpu_tasks.*": {"queue": "test_tasks"},
             "ias.tasks.cpu_tasks.*": {"queue": "test_tasks"},
         },
     }
@@ -271,3 +271,7 @@ def test_error_handling(
     assert rv.status_code == 200
     assert rv.json["errorCode"] == -1
     assert rv.json["errorMessage"] == "An unknown error occurred."
+
+
+def test_gpu(celery_session_worker, celery_session_app):
+    assert ias.tasks.gpu_tasks.CUDA_available.delay().get()["CUDA"]

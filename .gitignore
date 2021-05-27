@@ -150,3 +150,5 @@ cov_html/keybd_closed.png
 cov_html/keybd_open.png
 cov_html/status.json
 cov_html/style.css
+
+*.swp

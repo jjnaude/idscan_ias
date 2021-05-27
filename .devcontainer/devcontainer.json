@@ -3,7 +3,6 @@
 {
 	"name": "Python 3",
 	"dockerComposeFile": [
-		"../docker-compose.yml",
 		"docker-compose.yml"
 	],
 
@@ -44,7 +43,8 @@
 	"extensions": [
 		"ms-python.python",
 		"ms-python.vscode-pylance",
-		"42crunch.vscode-openapi"
+		"42crunch.vscode-openapi",
+		"davidanson.vscode-markdownlint"
 	],
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.

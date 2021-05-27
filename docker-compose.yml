@@ -2,6 +2,7 @@ version: '3'
 services:
         ias:
                 image: idscan_ias
+                user: 1001:1001
                 build: 
                         context: .
                         dockerfile: Dockerfile                        
@@ -9,6 +10,10 @@ services:
                         - redis
                         - rabbitmq
                         - flower
+                        - gpu_worker
+                        - cpu_worker
+                environment:
+                        - IAS_SKIP_GPU_CHECK
                 volumes:
                        - .:/home/appuser
                 network_mode: host
@@ -17,36 +22,33 @@ services:
                 command: python -m ias.swagger_server
         cpu_worker:
                 image: idscan_cpu_worker
+                user: 1001:1001
                 build: 
                         context: .
-                        dockerfile: cpu_worker/Dockerfile
-                # use host to allow remote machines to connect
+                        dockerfile: ias/tasks/cpu_tasks/Dockerfile
                 volumes:
-                        - .:/home/appuser
+                        - .:/ias
                 network_mode: host
-                working_dir: /home/appuser
-                entrypoint: celery -A ias.tasks worker --concurrency=2 -Ofair --loglevel=info -Q cpu_tasks
-#                entrypoint: celery worker -A app.celery --loglevel=info
-        # gpu_worker:
-        #         image: detweb_gpu_worker
-        #         build: gpu_worker
-        #         volumes:
-        #                 - ${SORTIES_PATH}:/sorties
-        #                 - ${APP_PATH}:/app
-        #                 - ${SRTM_PATH}:/root/.srtm
-        #                 - uwsgi-sockets:/tmp
-        #         environment:
-        #             - DB_URL=${DB_URL}
-        #             - REDIS_IP=${REDIS_IP}
-        #             - LOG_FOLDER=${LOG_FOLDER}
-        #             - CONFIG_FP=${CONFIG_FP}
-        #             - LC_ALL=${LC_ALL}
-        #             - LANG=${LANG}
-        #         network_mode: host
-        #         working_dir: /app/detweb
-        #         entrypoint: celery worker -A tasks.gpu_tasks --concurrency=1 -Ofair --loglevel=info -Q gpu_tasks -n gpu_worker
+                entrypoint: celery -A ias.tasks.cpu_tasks worker --concurrency=2 -Ofair --loglevel=info -Q cpu_tasks
+        gpu_worker:
+                image: idscan_gpu_worker
+                user: 1001:1001
+                build: 
+                  context: .
+                  dockerfile: ias/tasks/gpu_tasks/Dockerfile
+                deploy:
+                  resources:
+                    reservations:
+                      devices:
+                      - driver: nvidia
+                        capabilities: [compute]
+                volumes:
+                  - .:/ias
+                network_mode: host
+                entrypoint: celery -A ias.tasks.gpu_tasks worker --concurrency=1 -Ofair --loglevel=info -Q gpu_tasks
         flower:
                 image: mher/flower
+                user: 1001:1001
                 depends_on:
                     - redis
                 expose:
@@ -60,6 +62,7 @@ services:
                     - "6379"
         rabbitmq:
                 image: rabbitmq
+                user: 1001:1001
                 network_mode: host
                 volumes:
                         - ./rabbitmq:/etc/rabbitmq

@@ -6,3 +6,4 @@
 !Pipfile.lock
 !ias
 !cpu_worker
+!gpu_worker

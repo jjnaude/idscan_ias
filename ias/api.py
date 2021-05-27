@@ -2,8 +2,8 @@ import json
 
 import flask
 import redis
+from celery import current_app
 
-from ias.tasks.celery import celeryApp
 from ias.tasks.cpu_tasks import buildIndex, createMedia, query
 
 r = redis.from_url("redis://localhost/0")
@@ -89,7 +89,7 @@ def cancelJob(jobId):  # noqa: E501
     :rtype: str
     """
     if r.get(jobId):
-        res = celeryApp.AsyncResult(jobId)
+        res = current_app.AsyncResult(jobId)
         res.revoke()
         r.delete(jobId)
         return flask.Response(status=200)
@@ -108,7 +108,7 @@ def getJob(jobId):  # noqa: E501
     :rtype: InlineResponse2002
     """
     if r.get(jobId):
-        res = celeryApp.AsyncResult(jobId)
+        res = current_app.AsyncResult(jobId)
         result = {}
         result["status"] = res.state
         if result["status"] in ["SUCCESS", "FAILURE"]:

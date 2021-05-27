@@ -3,7 +3,12 @@ import time
 import uuid
 
 import redis
-from celery import shared_task
+from celery import Celery, shared_task
+
+celery = Celery(
+    "ias.tasks", backend="redis://localhost", broker="pyamqp://guest@localhost//"
+)
+celery.config_from_object("ias.tasks.cpu_tasks.celeryconfig")
 
 r = redis.Redis()
 

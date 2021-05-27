@@ -1,6 +1,9 @@
 [run]
 source = ias
 omit = ias/swagger_server/__main__.py
+       ias/tasks/cpu_tasks/celeryconfig.py
+       ias/tasks/gpu_tasks/celeryconfig.py
+       ias/swagger_server/celeryconfig.py
 branch = True
 
 [report]

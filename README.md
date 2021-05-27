@@ -18,14 +18,14 @@ Once these dependencies are in place, installation should be very straightforwar
 ```bash
 https://github.com/jjnaude/idscan_ias.git
 cd idscan_ias
-docker-compose up ias
+docker-compose up
 ```
 
-If all is well, the system should present the REST API at http://localhost:8080,the swagger-ui documentation will be available at http://localhost:8080/ui and the API definition itself in OpenAPI Specification format can be downloaded from 
-http://localhost:8080/openapi.json. This allows the use of a wide range of tooling that implements this standard https://github.com/OAI/OpenAPI-Specification/blob/main/IMPLEMENTATIONS.md#implementations to be used to generate documentation, test-harnesses, clients etc. Otherwise an error message should be displayed on the terminal.
+If all is well, the system should present the REST API at http://localhost:8080 ,the swagger-ui documentation will be available at http://localhost:8080/ui and the API definition itself in OpenAPI Specification format can be downloaded from 
+http://localhost:8080/openapi.json. This allows the use of a wide range of [tooling](https://github.com/OAI/OpenAPI-Specification/blob/main/IMPLEMENTATIONS.md#implementations) that implements this standard. These may be used to generate documentation, test-harnesses, clients etc. 
 
-Once it has been verified that a GPU can succesfully be made available to the GPU-worker service, it no longer makes sense to tie up a resource like this if the API is only being used to integrate against and does not actually use the GPU that has been reserved. In this case the API can be started without checking for CUDA availability by defining the environment variable IAS_SKIP_GPU_CHECK, allowing the API to be run from a machine that does not have an NVIDIA GPU present.
+Once it has been verified that a GPU can succesfully be made available to the GPU-worker service, it no longer makes sense to tie up a resource like this if the API is only being used to integrate against and does not actually require the GPU. In this case the API can be started without checking for CUDA availability by defining the environment variable IAS_SKIP_GPU_CHECK, allowing the API to be run from a machine that does not have an NVIDIA GPU present.
 
 ```bash
-IAS_SKIP_GPU_CHECK=1; docker-compose up ias 
+IAS_SKIP_GPU_CHECK=1 docker-compose up ias 
 ```

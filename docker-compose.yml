@@ -10,7 +10,6 @@ services:
                         - redis
                         - rabbitmq
                         - flower
-                        - gpu_worker
                         - cpu_worker
                 environment:
                         - IAS_SKIP_GPU_CHECK
